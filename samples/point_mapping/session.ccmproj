@@ -1,0 +1,345 @@
+{
+  "mode": 1,
+  "image": "camera.png",
+  "image_is_raw": false,
+  "data_bits": 12,
+  "black_mode": 0,
+  "black": [
+    64,
+    64,
+    64
+  ],
+  "clip_percent": 98,
+  "output_space": "srgb",
+  "model": 0,
+  "objective": 0,
+  "separate_gain": true,
+  "bound_coefficients": true,
+  "coef_min": -16,
+  "coef_max": 16,
+  "offset_mode": 0,
+  "neutral_weight": 1,
+  "quantize": false,
+  "point_mapping": {
+    "reference_image": "reference.png",
+    "reference_encoding": 0,
+    "ref_half_size": 30,
+    "cam_half_size": 35,
+    "neutralize_reference": true,
+    "match_brightness": false,
+    "pairs": [
+      {
+        "name": "Dark Skin",
+        "ref": [
+          150,
+          130
+        ],
+        "cam": [
+          1280,
+          270
+        ],
+        "neutral": false,
+        "enabled": true
+      },
+      {
+        "name": "Light Skin",
+        "ref": [
+          330,
+          130
+        ],
+        "cam": [
+          140,
+          110
+        ],
+        "neutral": false,
+        "enabled": true
+      },
+      {
+        "name": "Blue Sky",
+        "ref": [
+          510,
+          130
+        ],
+        "cam": [
+          140,
+          910
+        ],
+        "neutral": false,
+        "enabled": true
+      },
+      {
+        "name": "Foliage",
+        "ref": [
+          690,
+          130
+        ],
+        "cam": [
+          900,
+          110
+        ],
+        "neutral": false,
+        "enabled": true
+      },
+      {
+        "name": "Blue Flower",
+        "ref": [
+          870,
+          130
+        ],
+        "cam": [
+          520,
+          590
+        ],
+        "neutral": false,
+        "enabled": true
+      },
+      {
+        "name": "Bluish Green",
+        "ref": [
+          1050,
+          130
+        ],
+        "cam": [
+          520,
+          910
+        ],
+        "neutral": false,
+        "enabled": true
+      },
+      {
+        "name": "Orange",
+        "ref": [
+          150,
+          310
+        ],
+        "cam": [
+          900,
+          430
+        ],
+        "neutral": false,
+        "enabled": true
+      },
+      {
+        "name": "Purplish Blue",
+        "ref": [
+          330,
+          310
+        ],
+        "cam": [
+          900,
+          910
+        ],
+        "neutral": false,
+        "enabled": true
+      },
+      {
+        "name": "Moderate Red",
+        "ref": [
+          510,
+          310
+        ],
+        "cam": [
+          1280,
+          110
+        ],
+        "neutral": false,
+        "enabled": true
+      },
+      {
+        "name": "Purple",
+        "ref": [
+          690,
+          310
+        ],
+        "cam": [
+          900,
+          750
+        ],
+        "neutral": false,
+        "enabled": true
+      },
+      {
+        "name": "Yellow Green",
+        "ref": [
+          870,
+          310
+        ],
+        "cam": [
+          140,
+          590
+        ],
+        "neutral": false,
+        "enabled": true
+      },
+      {
+        "name": "Orange Yellow",
+        "ref": [
+          1050,
+          310
+        ],
+        "cam": [
+          900,
+          590
+        ],
+        "neutral": false,
+        "enabled": true
+      },
+      {
+        "name": "Blue",
+        "ref": [
+          150,
+          490
+        ],
+        "cam": [
+          1280,
+          430
+        ],
+        "neutral": false,
+        "enabled": true
+      },
+      {
+        "name": "Green",
+        "ref": [
+          330,
+          490
+        ],
+        "cam": [
+          900,
+          270
+        ],
+        "neutral": false,
+        "enabled": true
+      },
+      {
+        "name": "Red",
+        "ref": [
+          510,
+          490
+        ],
+        "cam": [
+          520,
+          110
+        ],
+        "neutral": false,
+        "enabled": true
+      },
+      {
+        "name": "Yellow",
+        "ref": [
+          690,
+          490
+        ],
+        "cam": [
+          1280,
+          910
+        ],
+        "neutral": false,
+        "enabled": true
+      },
+      {
+        "name": "Magenta",
+        "ref": [
+          870,
+          490
+        ],
+        "cam": [
+          1280,
+          750
+        ],
+        "neutral": false,
+        "enabled": true
+      },
+      {
+        "name": "Cyan",
+        "ref": [
+          1050,
+          490
+        ],
+        "cam": [
+          520,
+          270
+        ],
+        "neutral": false,
+        "enabled": true
+      },
+      {
+        "name": "White",
+        "ref": [
+          150,
+          670
+        ],
+        "cam": [
+          520,
+          430
+        ],
+        "neutral": true,
+        "enabled": true
+      },
+      {
+        "name": "Neutral 8",
+        "ref": [
+          330,
+          670
+        ],
+        "cam": [
+          1280,
+          590
+        ],
+        "neutral": true,
+        "enabled": true
+      },
+      {
+        "name": "Neutral 6.5",
+        "ref": [
+          510,
+          670
+        ],
+        "cam": [
+          140,
+          270
+        ],
+        "neutral": true,
+        "enabled": true
+      },
+      {
+        "name": "Neutral 5",
+        "ref": [
+          690,
+          670
+        ],
+        "cam": [
+          140,
+          430
+        ],
+        "neutral": true,
+        "enabled": true
+      },
+      {
+        "name": "Neutral 3.5",
+        "ref": [
+          870,
+          670
+        ],
+        "cam": [
+          520,
+          750
+        ],
+        "neutral": true,
+        "enabled": true
+      },
+      {
+        "name": "Black",
+        "ref": [
+          1050,
+          670
+        ],
+        "cam": [
+          140,
+          750
+        ],
+        "neutral": true,
+        "enabled": true
+      }
+    ]
+  }
+}

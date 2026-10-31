@@ -21,6 +21,7 @@
 #include <QScrollArea>
 #include <QSpinBox>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QStatusBar>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -83,6 +84,13 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     view_ = new ImageView;
     results_ = new ResultPanel;
+    setupPointViews();
+    centerStack_ = new QStackedWidget;
+    centerStack_->addWidget(view_);
+    auto* pointSplit = new QSplitter;
+    pointSplit->addWidget(refView_);
+    pointSplit->addWidget(camView_);
+    centerStack_->addWidget(pointSplit);
 
     auto* scroll = new QScrollArea;
     scroll->setWidget(buildSettingsPanel());
@@ -91,7 +99,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     auto* split = new QSplitter;
     split->addWidget(scroll);
-    split->addWidget(view_);
+    split->addWidget(centerStack_);
     split->addWidget(results_);
     split->setStretchFactor(0, 0);
     split->setStretchFactor(1, 3);
@@ -106,12 +114,20 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         updateOverlay();
     });
     connect(results_, &ResultPanel::patchIncludeToggled, this, [this](int i, bool include) {
-        if (i < 0 || i >= int(excluded_.size())) return;
-        excluded_[i] = !include;
-        updateOverlay();
+        if (pointMode()) {
+            if (i < 0 || i >= int(pairs_.size())) return;
+            pairs_[i].enabled = include;
+            updatePointTable();
+            updatePointViews();
+        } else {
+            if (i < 0 || i >= int(excluded_.size())) return;
+            excluded_[i] = !include;
+            updateOverlay();
+        }
         if (haveResult_) compute();
     });
 
+    setMode(0);
     onChartChanged();
     onIlluminantChanged();
     updateModelControls();
@@ -124,6 +140,17 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 QWidget* MainWindow::buildSettingsPanel() {
     auto* panel = new QWidget;
     auto* v = new QVBoxLayout(panel);
+
+    auto* modeRow = new QHBoxLayout;
+    mode_ = new QComboBox;
+    mode_->addItem(tr("Color chart"), 0);
+    mode_->addItem(tr("Point mapping (no chart)"), 1);
+    mode_->setToolTip(tr("Point mapping: click the same surface points in a reference image (e.g. phone photo)\n"
+                         "and in the camera image; the CCM is fitted to the reference colors."));
+    modeRow->addWidget(new QLabel(tr("Mode")));
+    modeRow->addWidget(mode_, 1);
+    v->addLayout(modeRow);
+    connect(mode_, &QComboBox::currentIndexChanged, this, [this] { setMode(mode_->currentData().toInt()); });
 
     // Image
     auto* gImg = new QGroupBox(tr("1. Image"));
@@ -232,6 +259,7 @@ QWidget* MainWindow::buildSettingsPanel() {
 
     // Chart
     auto* gChart = new QGroupBox(tr("4. Color chart"));
+    chartGroup_ = gChart;
     auto* fChart = new QFormLayout(gChart);
     chart_ = new QComboBox;
     for (const auto& c : chartPresets()) chart_->addItem(trCore(c.name), qs(c.id));
@@ -278,6 +306,8 @@ QWidget* MainWindow::buildSettingsPanel() {
     fChart->addRow(autoOrient_);
     connect(autoBtn, &QPushButton::clicked, this, &MainWindow::autoOrient);
     connect(autoOrient_, &QCheckBox::toggled, this, &MainWindow::invalidateResult);
+    pointGroup_ = buildPointGroup();
+    v->addWidget(pointGroup_);
     v->addWidget(gChart);
     connect(chart_, &QComboBox::currentIndexChanged, this, &MainWindow::onChartChanged);
     auto gridChanged = [this] {
@@ -520,6 +550,7 @@ void MainWindow::setImage(const LoadedImage& img) {
     updatePreview();
     // fit once the view has its final size (also right after startup)
     QTimer::singleShot(0, view_, &ImageView::fitToWindow);
+    QTimer::singleShot(0, camView_, &ImageView::fitToWindow);
 }
 
 double MainWindow::whiteLevel() const { return std::ldexp(1.0, dataBits_->value()) - 1.0; }
@@ -555,6 +586,7 @@ void MainWindow::updatePreview() {
     f.convertTo(u8, CV_8UC3, 255.0);
     QImage qi(u8.data, u8.cols, u8.rows, int(u8.step), QImage::Format_RGB888);
     view_->setImage(qi.copy(), previewScale_);
+    camView_->setImage(qi.copy(), previewScale_);
     updateOverlay();
 }
 
@@ -646,6 +678,14 @@ SampleSettings MainWindow::sampleSettings() const {
 }
 
 std::vector<bool> MainWindow::includedMask() const {
+    if (pointMode()) {
+        std::vector<bool> inc(pairs_.size(), false);
+        for (size_t i = 0; i < pairs_.size(); ++i)
+            inc[i] = pairs_[i].enabled && i < stats_.size() && i < refSamples_.size() && stats_[i].pixelCount > 0 &&
+                     refSamples_[i].pixelCount > 0 && stats_[i].saturatedRatio <= 0.01 &&
+                     refSamples_[i].saturatedRatio <= 0.01;
+        return inc;
+    }
     std::vector<bool> inc(chartSpec_.count(), false);
     for (int i = 0; i < chartSpec_.count(); ++i) {
         const bool sampled = i < int(stats_.size()) && stats_[i].pixelCount > 0 && stats_[i].saturatedRatio <= 0.01;
@@ -655,12 +695,23 @@ std::vector<bool> MainWindow::includedMask() const {
 }
 
 std::vector<bool> MainWindow::neutralMask() const {
+    if (pointMode()) {
+        std::vector<bool> n(pairs_.size(), false);
+        for (size_t i = 0; i < pairs_.size(); ++i) n[i] = pairs_[i].neutral;
+        return n;
+    }
     std::vector<bool> n(chartSpec_.count(), false);
     for (int i : chartSpec_.neutralIndices()) n[i] = true;
     return n;
 }
 
 void MainWindow::updateOverlay() {
+    if (pointMode()) {  // black level / clip / image changes resample the point pairs instead
+        samplePoints();
+        updatePointViews();
+        updatePointTable();
+        return;
+    }
     if (!cornersReady()) {
         view_->setOverlay({}, {});
         stats_.clear();
@@ -725,21 +776,60 @@ void MainWindow::compute() {
         notify(tr("Compute"), tr("Open a chart image first."));
         return;
     }
+    orientationWarning_.clear();
+    orientationNote_.clear();
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const bool prepared = pointMode() ? preparePointData() : prepareChartData();
+    if (!prepared) {
+        QApplication::restoreOverrideCursor();
+        return;
+    }
+
+    const std::vector<bool> included = includedMask();
+    const std::vector<bool> neutral = neutralMask();
+    std::vector<cv::Vec3d> cam;
+    std::vector<double> weight;
+    for (size_t i = 0; i < stats_.size(); ++i) {
+        cam.push_back(stats_[i].mean);
+        weight.push_back(included[i] ? 1.0 : 0.0);
+    }
+    const FitOptions opt = fitOptions();
+    fit_ = fitCcm(cam, targets_.linearRgb, targets_.lab, neutral, weight, opt);
+    QApplication::restoreOverrideCursor();
+    if (!fit_.ok) {
+        notify(tr("Compute"), qs(fit_.message));
+        return;
+    }
+    eval_ = evaluate(fit_, cam, targets_, included, neutral, opt.outputSpace, fit_.quantized);
+    separability_ = analyzeSeparability(stats_, targets_, included, neutral);
+    haveResult_ = true;
+
+    results_->showResult(names_, gridCols_, stats_, fit_, eval_, buildSummary(), buildDiagnostics());
+    cv::Mat corr = correctImage(preview_);
+    QImage qi(corr.data, corr.cols, corr.rows, int(corr.step), QImage::Format_RGB888);
+    results_->showCorrected(qi.copy());
+    statusBar()->showMessage(tr("ΔE2000 mean %1, max %2 over %3 patches (WB only: %4)")
+                                 .arg(eval_.de00.mean, 0, 'f', 2)
+                                 .arg(eval_.de00.max, 0, 'f', 2)
+                                 .arg(eval_.de00.count)
+                                 .arg(eval_.de00Baseline.mean, 0, 'f', 2) +
+                             (orientationNote_.isEmpty() ? QString() : "  |  " + orientationNote_));
+    if (!orientationWarning_.isEmpty()) notify(tr("Patch order"), orientationWarning_);
+}
+
+bool MainWindow::prepareChartData() {
     if (!cornersReady()) {
         notify(tr("Compute"), tr("Click the centers of the four corner patches first."));
-        return;
+        return false;
     }
     if (chartSpec_.neutralIndices().empty() && !chartSpec_.hasAllReferences()) {
         notify(tr("Compute"), tr("This chart needs a reference file (Load reference…)."));
-        return;
+        return false;
     }
-    QApplication::setOverrideCursor(Qt::WaitCursor);
     targets_ = currentTargets();
 
     // A mis-ordered chart (rotated/mirrored corner clicks) fits far worse than the right order.
     // Checked first and independent of the black level, which a wrong order would corrupt.
-    orientationWarning_.clear();
-    orientationNote_.clear();
     const auto ranked = rankOrientations(image_.rgb, chartCorners(), sampleSettings(), chartSpec_, targets_, excluded_);
     const auto clicked = std::find_if(ranked.begin(), ranked.end(), [](const OrientationCandidate& c) {
         return c.quarterTurns == 0 && !c.flipped;
@@ -779,38 +869,11 @@ void MainWindow::compute() {
     updateOverlay();
 
     // Linearity diagnostics on DN values
-    const std::vector<bool> included = includedMask();
-    const std::vector<bool> neutral = neutralMask();
-    linearity_ = analyzeLinearity(stats_, chartSpec_, included);
-
-    std::vector<cv::Vec3d> cam;
-    std::vector<double> weight;
-    for (int i = 0; i < chartSpec_.count(); ++i) {
-        cam.push_back(stats_[i].mean);
-        weight.push_back(included[i] ? 1.0 : 0.0);
-    }
-    const FitOptions opt = fitOptions();
-    fit_ = fitCcm(cam, targets_.linearRgb, targets_.lab, neutral, weight, opt);
-    QApplication::restoreOverrideCursor();
-    if (!fit_.ok) {
-        notify(tr("Compute"), qs(fit_.message));
-        return;
-    }
-    eval_ = evaluate(fit_, cam, targets_, included, neutral, opt.outputSpace, fit_.quantized);
-    separability_ = analyzeSeparability(stats_, targets_, included, neutral);
-    haveResult_ = true;
-
-    results_->showResult(chartSpec_, stats_, fit_, eval_, buildSummary(), buildDiagnostics());
-    cv::Mat corr = correctImage(preview_);
-    QImage qi(corr.data, corr.cols, corr.rows, int(corr.step), QImage::Format_RGB888);
-    results_->showCorrected(qi.copy());
-    statusBar()->showMessage(tr("ΔE2000 mean %1, max %2 over %3 patches (WB only: %4)")
-                                 .arg(eval_.de00.mean, 0, 'f', 2)
-                                 .arg(eval_.de00.max, 0, 'f', 2)
-                                 .arg(eval_.de00.count)
-                                 .arg(eval_.de00Baseline.mean, 0, 'f', 2) +
-                             (orientationNote_.isEmpty() ? QString() : "  |  " + orientationNote_));
-    if (!orientationWarning_.isEmpty()) notify(tr("Patch order"), orientationWarning_);
+    linearity_ = analyzeLinearity(stats_, chartSpec_, includedMask());
+    names_.clear();
+    for (const auto& p : chartSpec_.patches) names_.push_back(p.name);
+    gridCols_ = chartSpec_.cols;
+    return true;
 }
 
 void MainWindow::setChartCorners(const ChartCorners& c) {
@@ -932,6 +995,14 @@ QString MainWindow::buildSummary() const {
             s += tr("\nWARNING: some coefficients exceed the register range and were clipped. "
                     "Enable 'Limit' with the register range or separate the exposure gain.\n");
     }
+    if (pointMode()) {
+        s += tr("\nPoint mapping: %1 points, reference %2, output %3, %4\n")
+                 .arg(eval_.de00.count)
+                 .arg(QFileInfo(qs(refImage_.path)).fileName())
+                 .arg(outSpace_->currentText())
+                 .arg(matchBrightness_->isChecked() ? tr("brightness matched") : tr("chromaticity only"));
+        return s;
+    }
     const Illuminant il = currentIlluminant();
     s += tr("\nIlluminant: %1 (%2 K), output %3, %4\n")
              .arg(trCore(il.name))
@@ -943,8 +1014,11 @@ QString MainWindow::buildSummary() const {
 
 QString MainWindow::buildDiagnostics() const {
     QString d;
+    if (pointMode()) d += pointDiagnostics();
     d += tr("== Linearity (neutral patches) ==\n");
-    if (linearity_.ok) {
+    if (pointMode()) {
+        d += tr("Not available in point mapping (reference brightness is not used).\n");
+    } else if (linearity_.ok) {
         d += tr("Black estimate (DN): %1 / %2 / %3\n")
                  .arg(linearity_.black[0], 0, 'f', 1)
                  .arg(linearity_.black[1], 0, 'f', 1)
@@ -964,7 +1038,7 @@ QString MainWindow::buildDiagnostics() const {
         if (stats_[i].saturatedRatio > 0.01) {
             d += tr("Patch %1 (%2): %3 % clipped - excluded\n")
                      .arg(i + 1)
-                     .arg(qs(chartSpec_.patches[i].name))
+                     .arg(qs(names_[i]))
                      .arg(stats_[i].saturatedRatio * 100, 0, 'f', 1);
             ++sat;
         }
@@ -985,9 +1059,9 @@ QString MainWindow::buildDiagnostics() const {
         for (const auto& is : separability_.issues) {
             d += tr("  %1 (%2)  vs  %3 (%4): distance %5 σ, reference ΔE00 %6\n")
                      .arg(is.a + 1)
-                     .arg(qs(chartSpec_.patches[is.a].name))
+                     .arg(qs(names_[is.a]))
                      .arg(is.b + 1)
-                     .arg(qs(chartSpec_.patches[is.b].name))
+                     .arg(qs(names_[is.b]))
                      .arg(is.distance, 0, 'f', 2)
                      .arg(is.referenceDE, 0, 'f', 1);
             if (++shown >= 40) break;
@@ -1013,7 +1087,8 @@ void MainWindow::notify(const QString& title, const QString& message) {
 
 ExportInfo MainWindow::exportInfo() const {
     ExportInfo info;
-    info.chartName = chartSpec_.name;
+    info.chartName = pointMode() ? "Point mapping: " + QFileInfo(qs(refImage_.path)).fileName().toStdString()
+                                 : chartSpec_.name;
     const Illuminant il = currentIlluminant();
     info.illuminantName = il.name;
     info.cct = il.cct;
@@ -1039,7 +1114,7 @@ bool MainWindow::writeText(const QString& filter, const QString& suffix, const s
     return true;
 }
 
-void MainWindow::exportCsv() { writeText(tr("CSV (*.csv)"), "csv", ccm::exportCsv(fit_, eval_, chartSpec_)); }
+void MainWindow::exportCsv() { writeText(tr("CSV (*.csv)"), "csv", ccm::exportCsv(fit_, eval_, names_)); }
 void MainWindow::exportHeader() { writeText(tr("C/C++ header (*.h)"), "h", ccm::exportCHeader(fit_, exportInfo())); }
 void MainWindow::exportRegisters() { writeText(tr("Text (*.txt)"), "txt", ccm::exportRegisters(fit_, exportInfo())); }
 
@@ -1075,7 +1150,7 @@ QByteArray MainWindow::resultJson() const {
     for (const auto& p : eval_.patches) {
         QJsonObject o;
         o["index"] = p.index + 1;
-        o["name"] = qs(chartSpec_.patches[p.index].name);
+        o["name"] = qs(names_[p.index]);
         o["included"] = p.included;
         o["camera"] = vecToJson(p.cam);
         o["target"] = vecToJson(p.target);
@@ -1144,6 +1219,8 @@ QJsonObject MainWindow::settingsJson() const {
     for (int i = 0; i < int(excluded_.size()); ++i)
         if (excluded_[i]) excl.append(i);
     o["excluded"] = excl;
+    o["mode"] = mode_->currentData().toInt();
+    o["point_mapping"] = pointSettingsJson();
     o["model"] = model_->currentData().toInt();
     o["objective"] = objective_->currentData().toInt();
     o["separate_gain"] = separateGain_->isChecked();
@@ -1236,6 +1313,9 @@ void MainWindow::applySettingsJson(const QJsonObject& o, const QString& baseDir)
     preserveSum_->setChecked(o["preserve_row_sum"].toBool(true));
     offsetBits_->setValue(o["offset_bits"].toInt(12));
 
+    applyPointSettingsJson(o["point_mapping"].toObject(), baseDir);
+    mode_->setCurrentIndex(mode_->findData(o["mode"].toInt(0)));
+
     QVector<QPointF> corners;
     for (const auto& c : o["corners"].toArray()) {
         const QJsonArray p = c.toArray();
@@ -1286,7 +1366,7 @@ bool MainWindow::loadSessionFile(const QString& path, QString& error) {
 }
 
 bool MainWindow::computeNow(QString& error) {
-    if (image_.rgb.empty() || !cornersReady()) {
+    if (image_.rgb.empty() || (!pointMode() && !cornersReady())) {
         error = tr("Session has no image or no four corners.");
         return false;
     }

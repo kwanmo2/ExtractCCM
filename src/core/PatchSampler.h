@@ -38,6 +38,12 @@ cv::Vec2d chromaOf(const cv::Vec3d& rgb);
 cv::Matx33d gridToImage(const ChartCorners& corners, int rows, int cols);
 std::vector<Quad> patchQuads(const ChartCorners& corners, int rows, int cols, double fraction);
 std::vector<PatchStat> samplePatches(const cv::Mat& rgb, const ChartCorners& corners, const SampleSettings& s);
+PatchStat sampleQuad(const cv::Mat& rgb, const Quad& quad, const SampleSettings& s);  // rows/cols unused
+Quad squareAround(cv::Point2f center, double halfSize);
+
+// Raw channel values of the pixels inside a convex quad (8- or 16-bit RGB image).
+void quadPixels(const cv::Mat& rgb, const Quad& quad, std::vector<double> ch[3]);
+double trimmedMean(std::vector<double> v, double trimFraction);  // trims trimFraction from each end
 
 // Rotates the corner assignment by 90° steps, for charts photographed rotated.
 ChartCorners rotateCorners(const ChartCorners& c, int quarterTurns);

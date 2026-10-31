@@ -105,14 +105,25 @@ Evaluation evaluate(const FitResult& fit, const std::vector<cv::Vec3d>& cam, con
 
 LinearityResult analyzeLinearity(const std::vector<PatchStat>& stats, const ChartSpec& chart,
                                  const std::vector<bool>& included) {
+    std::vector<double> refY(chart.count(), 0.0);
+    std::vector<bool> neutral(chart.count(), false);
+    for (int i : chart.neutralIndices()) {
+        refY[i] = labToXyz(chart.patches[i].labD50, whiteD50())[1];
+        neutral[i] = true;
+    }
+    return analyzeLinearity(stats, refY, neutral, included);
+}
+
+LinearityResult analyzeLinearity(const std::vector<PatchStat>& stats, const std::vector<double>& refY,
+                                 const std::vector<bool>& neutral, const std::vector<bool>& included) {
     LinearityResult res;
     std::vector<int> idx;
-    for (int i : chart.neutralIndices())
-        if (i < int(stats.size()) && included[i] && stats[i].pixelCount > 0) idx.push_back(i);
+    for (int i = 0; i < int(stats.size()) && i < int(refY.size()); ++i)
+        if (neutral[i] && included[i] && stats[i].pixelCount > 0 && refY[i] > 0) idx.push_back(i);
     if (idx.size() < 3) return res;
 
     std::vector<double> Y;
-    for (int i : idx) Y.push_back(labToXyz(chart.patches[i].labD50, whiteD50())[1]);
+    for (int i : idx) Y.push_back(refY[i]);
 
     res.r2 = 1.0;
     double expSum = 0;
@@ -293,7 +304,7 @@ std::string exportCHeader(const FitResult& fit, const ExportInfo& info) {
     return os.str();
 }
 
-std::string exportCsv(const FitResult& fit, const Evaluation& ev, const ChartSpec& chart) {
+std::string exportCsv(const FitResult& fit, const Evaluation& ev, const std::vector<std::string>& names) {
     std::ostringstream os;
     os << "section,row,c0,c1,c2,c3,c4,c5\n";
     for (int r = 0; r < 3; ++r) {
@@ -306,7 +317,7 @@ std::string exportCsv(const FitResult& fit, const Evaluation& ev, const ChartSpe
     os << "patch,name,included,cam_r,cam_g,cam_b,target_r,target_g,target_b,out_r,out_g,out_b,"
           "target_L,target_a,target_b,out_L,out_a,out_b,dE00,dE76,dC,dE00_wb_only\n";
     for (const auto& p : ev.patches) {
-        os << p.index + 1 << ",\"" << chart.patches[p.index].name << "\"," << (p.included ? 1 : 0);
+        os << p.index + 1 << ",\"" << names[p.index] << "\"," << (p.included ? 1 : 0);
         for (const cv::Vec3d* v : {&p.cam, &p.target, &p.predicted, &p.targetLab, &p.predictedLab})
             for (int k = 0; k < 3; ++k) os << "," << fmt("%.6f", (*v)[k]);
         os << "," << fmt("%.4f", p.de00) << "," << fmt("%.4f", p.de76) << "," << fmt("%.4f", p.dc) << ","

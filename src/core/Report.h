@@ -48,6 +48,9 @@ struct LinearityResult {
 };
 LinearityResult analyzeLinearity(const std::vector<PatchStat>& stats, const ChartSpec& chart,
                                  const std::vector<bool>& included);
+// General form: refY is the reference luminance of each patch; only neutral patches are used.
+LinearityResult analyzeLinearity(const std::vector<PatchStat>& stats, const std::vector<double>& refY,
+                                 const std::vector<bool>& neutral, const std::vector<bool>& included);
 
 // Black level from the whole chart: per channel DN = a . targetLinear + black (least squares).
 // Uses chromatic patches too, so it is not biased by slightly non-neutral gray patches.
@@ -73,7 +76,7 @@ struct ExportInfo {
 };
 std::string formatMatrixText(const FitResult& fit);
 std::string exportCHeader(const FitResult& fit, const ExportInfo& info);
-std::string exportCsv(const FitResult& fit, const Evaluation& ev, const ChartSpec& chart);
+std::string exportCsv(const FitResult& fit, const Evaluation& ev, const std::vector<std::string>& names);
 std::string exportRegisters(const FitResult& fit, const ExportInfo& info);
 
 }  // namespace ccm

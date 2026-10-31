@@ -8,6 +8,7 @@
 #include "core/Illuminant.h"
 #include "core/ImageIO.h"
 #include "core/PatchSampler.h"
+#include "core/PointMapping.h"
 #include "core/Report.h"
 #include "core/Targets.h"
 
@@ -17,6 +18,9 @@ class QDoubleSpinBox;
 class QLabel;
 class QPushButton;
 class QSpinBox;
+class QStackedWidget;
+class QGroupBox;
+class QTableWidget;
 class ImageView;
 class ResultPanel;
 
@@ -47,6 +51,8 @@ private:
     void compute();
     void autoOrient();
     void setChartCorners(const ccm::ChartCorners& corners);
+    bool prepareChartData();  // compute() input for chart mode
+    bool preparePointData();  // compute() input for point-mapping mode
     void exportJson();
     QByteArray resultJson() const;
     void exportCsv();
@@ -64,6 +70,28 @@ private:
     void updateOverlay();
     void updateModelControls();
     void invalidateResult();
+
+    // point-mapping mode (PointMode.cpp)
+    bool pointMode() const;
+    void setMode(int mode);
+    QGroupBox* buildPointGroup();
+    void setupPointViews();
+    void openReferenceImage();
+    void setReferenceImage(const ccm::LoadedImage& img);
+    void updateReferencePreview();
+    void onPointClicked(int side, QPointF pos);
+    void onMarkerMoved(int side, int index, QPointF pos);
+    void selectPair(int index);
+    void deleteSelectedPair();
+    void cancelPendingPoint();
+    void clearPairs();
+    void samplePoints();
+    void updatePointViews();
+    void updatePointTable();
+    ccm::RefEncoding refEncoding() const;
+    QJsonObject pointSettingsJson() const;
+    void applyPointSettingsJson(const QJsonObject& o, const QString& baseDir);
+    QString pointDiagnostics() const;
 
     // helpers
     double whiteLevel() const;
@@ -121,6 +149,20 @@ private:
     QSpinBox* offsetBits_ = nullptr;
     ImageView* view_ = nullptr;
     ResultPanel* results_ = nullptr;
+    // point-mapping widgets
+    QComboBox* mode_ = nullptr;
+    QStackedWidget* centerStack_ = nullptr;
+    ImageView* refView_ = nullptr;
+    ImageView* camView_ = nullptr;
+    QGroupBox* chartGroup_ = nullptr;
+    QGroupBox* pointGroup_ = nullptr;
+    QLabel* refInfo_ = nullptr;
+    QComboBox* refEncoding_ = nullptr;
+    QSpinBox* refHalf_ = nullptr;
+    QSpinBox* camHalf_ = nullptr;
+    QCheckBox* neutralizeRef_ = nullptr;
+    QCheckBox* matchBrightness_ = nullptr;
+    QTableWidget* pointTable_ = nullptr;
 
     // state
     ccm::LoadedImage image_;
@@ -137,6 +179,20 @@ private:
     ccm::Evaluation eval_;
     ccm::LinearityResult linearity_;
     ccm::SeparabilityReport separability_;
+    // compute() input, filled by prepareChartData()/preparePointData()
+    std::vector<std::string> names_;
+    int gridCols_ = 6;
+    // point-mapping state
+    ccm::LoadedImage refImage_;
+    cv::Mat refPreview_;
+    double refPreviewScale_ = 1.0;
+    std::vector<ccm::PointPair> pairs_;
+    std::vector<ccm::ReferenceSample> refSamples_;  // one per pair
+    int pendingSide_ = -1;  // 0 = reference, 1 = camera, -1 = none
+    QPointF pendingPos_;
+    int selectedPair_ = -1;
+    cv::Vec3d referenceGains_{1, 1, 1};
+    bool updatingTable_ = false;
     QString orientationWarning_;  // set by compute() when another corner order fits much better
     QString orientationNote_;     // set by compute() when it fixed the corner order itself
     bool haveResult_ = false;

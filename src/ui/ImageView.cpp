@@ -31,6 +31,11 @@ void ImageView::setImage(const QImage& preview, double previewScale) {
     viewport()->update();
 }
 
+void ImageView::setMarkers(const QVector<Marker>& markers) {
+    markers_ = markers;
+    viewport()->update();
+}
+
 void ImageView::fitToWindow() {
     if (pixmap_) fitInView(pixmap_, Qt::KeepAspectRatio);
 }
@@ -56,6 +61,14 @@ void ImageView::setOverlay(const QVector<QPolygonF>& quads, const QVector<PatchS
 
 QPointF ImageView::toImage(const QPoint& viewPos) const { return mapToScene(viewPos) / scale_; }
 
+int ImageView::hitMarker(const QPoint& viewPos) const {
+    for (int i = int(markers_.size()) - 1; i >= 0; --i) {
+        const QPoint c = mapFromScene(toScene(markers_[i].pos));
+        if (std::hypot(c.x() - viewPos.x(), c.y() - viewPos.y()) <= kHandleRadius + 3) return i;
+    }
+    return -1;
+}
+
 int ImageView::hitCorner(const QPoint& viewPos) const {
     for (int i = 0; i < corners_.size(); ++i) {
         const QPoint c = mapFromScene(toScene(corners_[i]));
@@ -73,6 +86,12 @@ void ImageView::mousePressEvent(QMouseEvent* e) {
         return;
     }
     if (e->button() != Qt::LeftButton || !pixmap_) return;
+    if (mode_ == Mode::Points) {
+        dragging_ = hitMarker(e->pos());
+        if (dragging_ >= 0) emit markerPressed(dragging_);
+        else emit pointClicked(toImage(e->pos()));
+        return;
+    }
     dragging_ = hitCorner(e->pos());
     if (dragging_ < 0 && corners_.size() < 4) {
         corners_.push_back(toImage(e->pos()));
@@ -89,13 +108,18 @@ void ImageView::mouseMoveEvent(QMouseEvent* e) {
         verticalScrollBar()->setValue(verticalScrollBar()->value() - d.y());
         return;
     }
+    if (dragging_ >= 0 && mode_ == Mode::Points) {
+        emit markerMoved(dragging_, toImage(e->pos()));
+        return;
+    }
     if (dragging_ >= 0) {
         corners_[dragging_] = toImage(e->pos());
         viewport()->update();
         if (corners_.size() == 4) emit cornersChanged();
         return;
     }
-    setCursor(hitCorner(e->pos()) >= 0 ? Qt::SizeAllCursor : Qt::CrossCursor);
+    const bool onHandle = mode_ == Mode::Points ? hitMarker(e->pos()) >= 0 : hitCorner(e->pos()) >= 0;
+    setCursor(onHandle ? Qt::SizeAllCursor : Qt::CrossCursor);
 }
 
 void ImageView::mouseReleaseEvent(QMouseEvent*) {
@@ -115,8 +139,35 @@ void ImageView::resizeEvent(QResizeEvent* e) {
     if (!userZoomed_) fitToWindow();
 }
 
+void ImageView::drawMarkers(QPainter* p, double px) {
+    QFont f = p->font();
+    f.setPointSizeF(std::max(9.0 * px, 0.1));
+    f.setBold(true);
+    for (const auto& m : markers_) {
+        const QPointF c = toScene(m.pos);
+        const double h = m.halfSize * scale_;  // sampling square in scene units
+        const QColor col = m.selected ? QColor(255, 220, 0) : m.color;
+        p->setBrush(Qt::NoBrush);
+        p->setPen(QPen(col, (m.selected ? 2.5 : 1.5) * px, m.pending ? Qt::DashLine : Qt::SolidLine));
+        p->drawRect(QRectF(c.x() - h, c.y() - h, 2 * h, 2 * h));
+        p->setPen(QPen(Qt::black, 1.0 * px));
+        p->setBrush(col);
+        p->drawEllipse(c, kHandleRadius * px * 0.6, kHandleRadius * px * 0.6);
+        p->setFont(f);
+        const QPointF textPos = c + QPointF(std::max(h, kHandleRadius * px) + 3 * px, -3 * px);
+        p->setPen(Qt::black);
+        p->drawText(textPos + QPointF(px, px), m.label);
+        p->setPen(col);
+        p->drawText(textPos, m.label);
+    }
+}
+
 void ImageView::drawForeground(QPainter* p, const QRectF&) {
     const double px = 1.0 / transform().m11();  // one screen pixel in scene units
+    if (mode_ == Mode::Points) {
+        drawMarkers(p, px);
+        return;
+    }
 
     for (int i = 0; i < quads_.size(); ++i) {
         QColor c = Qt::green;

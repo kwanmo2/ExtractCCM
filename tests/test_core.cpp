@@ -13,6 +13,7 @@
 #include "core/ColorMath.h"
 #include "core/Illuminant.h"
 #include "core/PatchSampler.h"
+#include "core/PointMapping.h"
 #include "core/Report.h"
 #include "core/Targets.h"
 
@@ -302,6 +303,66 @@ static void testEndToEndSyntheticImage() {
     CHECK(sep.issues.empty());
 }
 
+// Point mapping: reference = true color with a warm cast and unreliable per-point brightness,
+// camera = desaturating linear response. Chroma-only targets must still give the true colors.
+static void testPointMapping() {
+    // sRGB decoding of the reference happens per pixel: code 128 -> 0.2158
+    cv::Mat flat(20, 20, CV_8UC3, cv::Scalar(128, 128, 128));
+    ReferenceSample rs = sampleReference(flat, squareAround(cv::Point2f(10, 10), 5), RefEncoding::SRGB);
+    CHECK_NEAR(rs.linear[0], 0.2158, 1e-4);
+    CHECK(rs.pixelCount > 0 && rs.saturatedRatio == 0.0);
+
+    const ChartSpec& cc = chartPresets()[0];
+    const Targets truth = computeTargets(cc, *findIlluminant("D65"), TargetOptions{});
+    const cv::Matx33d camFromTarget(0.55, 0.30, 0.10, 0.20, 0.60, 0.15, 0.10, 0.25, 0.45);
+    const cv::Vec3d cast(1.15, 1.0, 0.75);
+    std::mt19937 rng(11);
+    std::uniform_real_distribution<double> bright(0.6, 1.4);
+    std::vector<cv::Vec3d> ref, cam;
+    std::vector<bool> neutral(24, false), inc(24, true);
+    for (int i : cc.neutralIndices()) neutral[i] = true;
+    for (int i = 0; i < 24; ++i) {
+        ref.push_back(truth.linearRgb[i].mul(cast) * bright(rng));
+        cam.push_back(camFromTarget * truth.linearRgb[i]);
+    }
+
+    PointTargetOptions o;
+    PointTargets pt = buildPointTargets(ref, cam, neutral, inc, o);
+    CHECK(pt.ok);
+    // neutralization removes the cast: the gray points together become R = G = B
+    // (individual ColorChecker grays are slightly tinted, the cast is 15-25%)
+    cv::Vec3d graySum(0, 0, 0);
+    for (int i : cc.neutralIndices()) graySum += pt.targets.linearRgb[i] / pt.targets.linearRgb[i][1];
+    CHECK_NEAR(graySum[0] / graySum[1], 1.0, 0.02);
+    CHECK_NEAR(graySum[2] / graySum[1], 1.0, 0.02);
+
+    // chroma error of the fitted CCM against the true colors, at the true luminance
+    const RgbSpace& srgb = rgbSpace("srgb");
+    auto chromaError = [&](const Targets& tg) {
+        FitResult f = fitCcm(cam, tg.linearRgb, tg.lab, neutral, std::vector<double>(24, 1.0), FitOptions{});
+        double sum = 0;
+        for (int i = 0; i < 24; ++i) {
+            cv::Vec3d p = applyFit(f, cam[i], false);
+            const double yp = srgb.rgbToXyz(1, 0) * p[0] + srgb.rgbToXyz(1, 1) * p[1] + srgb.rgbToXyz(1, 2) * p[2];
+            const double yt = srgb.rgbToXyz(1, 0) * truth.linearRgb[i][0] + srgb.rgbToXyz(1, 1) * truth.linearRgb[i][1] +
+                              srgb.rgbToXyz(1, 2) * truth.linearRgb[i][2];
+            if (yp > 0) p *= yt / yp;
+            sum += deltaC(linearRgbToLab(p, srgb), truth.lab[i]);
+        }
+        return sum / 24;
+    };
+    const double chromaOnly = chromaError(pt.targets);
+    o.matchBrightness = true;
+    const double withBrightness = chromaError(buildPointTargets(ref, cam, neutral, inc, o).targets);
+    std::printf("  point mapping: mean dC chroma-only %.2f, brightness matched %.2f\n", chromaOnly, withBrightness);
+    CHECK(chromaOnly < 1.0);
+    CHECK(withBrightness > 2.0 * chromaOnly);
+
+    // neutralizing needs at least one gray point
+    o = PointTargetOptions{};
+    CHECK(!buildPointTargets(ref, cam, std::vector<bool>(24, false), inc, o).ok);
+}
+
 static void testReferenceLoader() {
     const std::string path = "ccm_test_ref.txt";
     FILE* f = std::fopen(path.c_str(), "w");
@@ -326,6 +387,7 @@ int main() {
         {"fitRecoversMatrix", testFitRecoversMatrix},
         {"constraintsAndQuantization", testConstraintsAndQuantization},
         {"endToEndSyntheticImage", testEndToEndSyntheticImage},
+        {"pointMapping", testPointMapping},
         {"referenceLoader", testReferenceLoader},
     };
     for (const auto& [name, fn] : tests) {

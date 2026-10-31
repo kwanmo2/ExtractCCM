@@ -2,7 +2,6 @@
 #include <QTabWidget>
 #include <QWidget>
 
-#include "core/ChartSpec.h"
 #include "core/PatchSampler.h"
 #include "core/Report.h"
 
@@ -15,7 +14,7 @@ class SwatchWidget : public QWidget {
     Q_OBJECT
 public:
     explicit SwatchWidget(QWidget* parent = nullptr) : QWidget(parent) { setMinimumSize(300, 200); }
-    void setData(const ccm::ChartSpec& chart, const ccm::Evaluation& ev);
+    void setData(int cols, const ccm::Evaluation& ev);
 
 protected:
     void paintEvent(QPaintEvent*) override;
@@ -30,7 +29,8 @@ class ResultPanel : public QTabWidget {
 public:
     explicit ResultPanel(QWidget* parent = nullptr);
 
-    void showResult(const ccm::ChartSpec& chart, const std::vector<ccm::PatchStat>& stats,
+    // names: one per patch/point; gridCols: columns of the swatch grid
+    void showResult(const std::vector<std::string>& names, int gridCols, const std::vector<ccm::PatchStat>& stats,
                     const ccm::FitResult& fit, const ccm::Evaluation& ev, const QString& summary,
                     const QString& diagnostics);
     void showCorrected(const QImage& img);

@@ -23,6 +23,7 @@ add_library(ccmcore STATIC
     src/core/CcmSolver.cpp
     src/core/Report.cpp
     src/core/AutoOrient.cpp
+    src/core/PointMapping.cpp
 )
 target_include_directories(ccmcore PUBLIC src)
 target_link_libraries(ccmcore PUBLIC ${OpenCV_LIBS})
@@ -31,7 +32,7 @@ target_include_directories(ccmcore PUBLIC ${OpenCV_INCLUDE_DIRS})
 # ---- GUI ----
 qt_add_executable(ExtractCCM WIN32
     src/main.cpp
-    src/ui/MainWindow.cpp src/ui/MainWindow.h
+    src/ui/MainWindow.cpp src/ui/MainWindow.h src/ui/PointMode.cpp
     src/ui/ImageView.cpp src/ui/ImageView.h
     src/ui/ResultPanel.cpp src/ui/ResultPanel.h
     src/ui/RawImportDialog.cpp src/ui/RawImportDialog.h

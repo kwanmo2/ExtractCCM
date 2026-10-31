@@ -43,6 +43,73 @@ KO = {
     "as shown in the chart panel.":
     "차트 이미지(카메라 CCM·감마 OFF)를 열고, 패치 1 → 2 → 3 → 4의 중심을 차례로 클릭하세요.",
 
+    # ---- point mapping mode
+    "Color chart": "컬러 차트",
+    "Point mapping (no chart)": "대응점 맵핑 (차트 없음)",
+    "Point mapping: click the same surface points in a reference image (e.g. phone photo)\n"
+    "and in the camera image; the CCM is fitted to the reference colors.":
+    "대응점 맵핑: 기준 이미지(예: 휴대폰 사진)와 카메라 이미지에서 같은 표면 지점을 클릭하면,\n"
+    "기준 이미지의 색에 맞춰 CCM을 계산합니다.",
+    "Point mapping: open the reference image (left) and the camera image (right), then click matching points.":
+    "대응점 맵핑: 기준 이미지(왼쪽)와 카메라 이미지(오른쪽)를 열고 같은 지점을 차례로 클릭하세요.",
+    "4. Reference image / point pairs": "4. 기준 이미지 / 대응점",
+    "Open reference image…": "기준 이미지 열기…",
+    "Open reference image": "기준 이미지 열기",
+    "No reference image": "기준 이미지 없음",
+    "%1\n%2 x %3": "%1\n%2 x %3",
+    "Reference encoding": "기준 인코딩",
+    "sRGB (phone JPEG/PNG)": "sRGB (휴대폰 JPEG/PNG)",
+    "Gamma 2.2": "감마 2.2",
+    "Linear": "선형",
+    "Sample area": "샘플 영역",
+    "ref ±": "기준 ±",
+    "cam ±": "카메라 ±",
+    "Neutralize the reference with gray points (recommended)": "회색 점으로 기준 이미지 중립화 (권장)",
+    "Removes the color cast of the reference image: points marked as gray\nbecome neutral in the target.":
+    "기준 이미지의 색 틀어짐을 제거합니다: 회색으로 표시한 점이\n목표값에서 무채색이 됩니다.",
+    "Match brightness too": "밝기까지 맞춤",
+    "Off (recommended): only the reference color (hue/saturation) is used;\n"
+    "brightness follows the camera. Reflections and exposure differences\n"
+    "in the reference image make its brightness unreliable.":
+    "끄기(권장): 기준 이미지의 색(색상/채도)만 사용하고 밝기는 카메라를 따릅니다.\n"
+    "기준 이미지는 반사와 노출 차이 때문에 밝기를 신뢰하기 어렵습니다.",
+    "Click a point in one image, then the same surface point in the other image.\n"
+    "Esc cancels, Delete removes the selected pair, drag a marker to move it.\n"
+    "Mark white/gray surfaces as 'Gray'. Use flat, evenly lit areas.":
+    "한쪽 이미지에서 점을 클릭한 뒤, 다른 쪽 이미지에서 같은 표면 지점을 클릭하세요.\n"
+    "Esc: 취소, Delete: 선택한 쌍 삭제, 마커 드래그: 이동.\n"
+    "흰색/회색 표면은 '회색'으로 표시하고, 평평하고 고르게 밝은 영역을 고르세요.",
+    "Gray": "회색",
+    "Ref": "기준",
+    "Cam": "카메라",
+    "Ref σ %": "기준 σ %",
+    "Cam σ %": "카메라 σ %",
+    "Clip %": "포화 %",
+    "Delete pair": "쌍 삭제",
+    "Clear all": "전체 삭제",
+    "Remove all %1 point pairs?": "대응점 %1쌍을 모두 삭제할까요?",
+    " G": " 회",
+    "Now click the same point in the camera image (Esc cancels).": "이제 카메라 이미지에서 같은 지점을 클릭하세요 (Esc: 취소).",
+    "Now click the same point in the reference image (Esc cancels).": "이제 기준 이미지에서 같은 지점을 클릭하세요 (Esc: 취소).",
+    "Pair %1 added. Mark it as 'Gray' in the table if it is a white/gray surface.":
+    "%1번 쌍을 추가했습니다. 흰색/회색 표면이면 표에서 '회색'에 체크하세요.",
+    "Open a reference image first.": "먼저 기준 이미지를 여세요.",
+    "Need at least 4 point pairs (8 or more recommended).": "대응점이 4쌍 이상 필요합니다 (8쌍 이상 권장).",
+    "\nPoint mapping: %1 points, reference %2, output %3, %4\n": "\n대응점 맵핑: %1개 점, 기준 %2, 출력 %3, %4\n",
+    "brightness matched": "밝기 포함",
+    "chromaticity only": "색감만",
+    "Not available in point mapping (reference brightness is not used).\n":
+    "대응점 맵핑에서는 사용할 수 없습니다 (기준 이미지 밝기를 쓰지 않음).\n",
+    "== Point mapping ==\n": "== 대응점 맵핑 ==\n",
+    "Points used: %1 (gray: %2)\n": "사용한 점: %1개 (회색 %2개)\n",
+    "Reference neutralization gains R/G/B: %1 / %2 / %3\n": "기준 이미지 중립화 게인 R/G/B: %1 / %2 / %3\n",
+    "WARNING: no gray point - white balance is taken from all points (gray world) and may be off.\n":
+    "경고: 회색 점이 없습니다. 모든 점의 평균으로 화이트밸런스를 잡으므로 틀어질 수 있습니다.\n",
+    "WARNING: only %1 points - the CCM is poorly constrained. Use 8+ points with different colors.\n":
+    "경고: 점이 %1개뿐이라 CCM이 충분히 결정되지 않습니다. 서로 다른 색으로 8개 이상 찍으세요.\n",
+    "Excluded (clipped in either image): %1\n": "제외됨 (어느 한쪽 이미지에서 포화): %1\n",
+    "High variation inside the sample area (texture/edge?): %1\n": "샘플 영역 안의 편차가 큼 (질감/경계?): %1\n",
+
     # ---- 1. image
     "1. Image": "1. 이미지",
     "Open image…": "이미지 열기…",
@@ -329,6 +396,9 @@ CORE = {
     "Load the batch CGATS file shipped with the target. Gray scale row is not part of this grid.":
     "타깃과 함께 제공된 로트별 CGATS 파일을 불러오세요. 그레이 스케일 행은 이 격자에 포함되지 않습니다.",
     "Set rows/columns and load a reference file.": "행/열을 설정하고 기준값 파일을 불러오세요.",
+    # point mapping
+    "Mark at least one gray/white point to neutralize the reference.":
+    "기준 이미지를 중립화하려면 회색/흰색 점을 하나 이상 표시하세요.",
     # models
     "3x3": "3x3",
     "3x3 white-preserving": "3x3 백색 보존",

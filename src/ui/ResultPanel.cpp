@@ -33,9 +33,9 @@ QColor deltaEColor(double de) {
 
 }  // namespace
 
-void SwatchWidget::setData(const ccm::ChartSpec& chart, const ccm::Evaluation& ev) {
-    rows_ = chart.rows;
-    cols_ = chart.cols;
+void SwatchWidget::setData(int cols, const ccm::Evaluation& ev) {
+    cols_ = std::max(cols, 1);
+    rows_ = ev.patches.empty() ? 0 : int((ev.patches.size() + cols_ - 1) / cols_);
     ev_ = ev;
     update();
 }
@@ -112,26 +112,26 @@ ResultPanel::ResultPanel(QWidget* parent) : QTabWidget(parent) {
 void ResultPanel::clear() {
     matrixText_->clear();
     table_->setRowCount(0);
-    swatches_->setData(ccm::ChartSpec{}, ccm::Evaluation{});
+    swatches_->setData(1, ccm::Evaluation{});
     corrected_->clear();
     diagText_->clear();
 }
 
 void ResultPanel::showCorrected(const QImage& img) { corrected_->setPixmap(QPixmap::fromImage(img)); }
 
-void ResultPanel::showResult(const ccm::ChartSpec& chart, const std::vector<ccm::PatchStat>& stats,
+void ResultPanel::showResult(const std::vector<std::string>& names, int gridCols, const std::vector<ccm::PatchStat>& stats,
                              const ccm::FitResult&, const ccm::Evaluation& ev, const QString& summary,
                              const QString& diagnostics) {
     matrixText_->setPlainText(summary);
     diagText_->setPlainText(diagnostics);
-    swatches_->setData(chart, ev);
+    swatches_->setData(gridCols, ev);
 
     updating_ = true;
     table_->setRowCount(int(ev.patches.size()));
     for (int i = 0; i < int(ev.patches.size()); ++i) {
         const auto& r = ev.patches[i];
         table_->setItem(i, 0, numItem(i + 1, 0));
-        auto* name = new QTableWidgetItem(QString::fromStdString(chart.patches[i].name));
+        auto* name = new QTableWidgetItem(QString::fromStdString(i < int(names.size()) ? names[i] : std::to_string(i + 1)));
         name->setFlags(name->flags() & ~Qt::ItemIsEditable);
         table_->setItem(i, 1, name);
         auto* use = new QTableWidgetItem;
