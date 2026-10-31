@@ -1,0 +1,34 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "conda",
+      "displayName": "MSVC + Qt6/OpenCV from miniforge",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/conda",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "$env{USERPROFILE}/miniforge3/Library",
+        "CCM_RUNTIME_DIR": "$env{USERPROFILE}/miniforge3/Library/bin"
+      }
+    },
+    {
+      "name": "vcpkg",
+      "displayName": "MSVC + vcpkg manifest (builds Qt6/OpenCV from source)",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/vcpkg",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-windows"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "conda", "configurePreset": "conda", "configuration": "Release" },
+    { "name": "vcpkg", "configurePreset": "vcpkg", "configuration": "Release" }
+  ],
+  "testPresets": [
+    { "name": "conda", "configurePreset": "conda", "configuration": "Release", "output": { "outputOnFailure": true } }
+  ]
+}
