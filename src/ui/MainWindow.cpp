@@ -260,13 +260,24 @@ QWidget* MainWindow::buildSettingsPanel() {
     sampleSize_->setSuffix(tr(" % of pitch"));
     fChart->addRow(tr("Sample size"), sampleSize_);
     auto* orientRow = new QHBoxLayout;
+    auto* autoBtn = new QPushButton(tr("Auto orientation"));
+    autoBtn->setToolTip(tr("Tries all 8 corner orders (rotations and mirror) and keeps the one whose\n"
+                           "patch colors fit the chart reference best."));
     auto* rotBtn = new QPushButton(tr("Rotate 90°"));
     auto* flipBtn = new QPushButton(tr("Flip"));
     auto* clearBtn = new QPushButton(tr("Clear corners"));
+    orientRow->addWidget(autoBtn);
     orientRow->addWidget(rotBtn);
     orientRow->addWidget(flipBtn);
     orientRow->addWidget(clearBtn);
     fChart->addRow(orientRow);
+    autoOrient_ = new QCheckBox(tr("Fix the patch order automatically when computing"));
+    autoOrient_->setChecked(true);
+    autoOrient_->setToolTip(tr("If the clicked corners are rotated or mirrored relative to the chart,\n"
+                               "the order that fits the reference best is used instead."));
+    fChart->addRow(autoOrient_);
+    connect(autoBtn, &QPushButton::clicked, this, &MainWindow::autoOrient);
+    connect(autoOrient_, &QCheckBox::toggled, this, &MainWindow::invalidateResult);
     v->addWidget(gChart);
     connect(chart_, &QComboBox::currentIndexChanged, this, &MainWindow::onChartChanged);
     auto gridChanged = [this] {
@@ -285,11 +296,8 @@ QWidget* MainWindow::buildSettingsPanel() {
     });
     auto reorder = [this](ChartCorners (*fn)(const ChartCorners&)) {
         if (!cornersReady()) return;
-        ChartCorners c = fn(chartCorners());
-        view_->setCorners({QPointF(c[0].x, c[0].y), QPointF(c[1].x, c[1].y), QPointF(c[2].x, c[2].y),
-                           QPointF(c[3].x, c[3].y)});
+        setChartCorners(fn(chartCorners()));
         invalidateResult();
-        updateOverlay();
     };
     connect(rotBtn, &QPushButton::clicked, this, [reorder] { reorder([](const ChartCorners& c) { return rotateCorners(c, 1); }); });
     connect(flipBtn, &QPushButton::clicked, this, [reorder] { reorder(flipCorners); });
@@ -726,14 +734,36 @@ void MainWindow::compute() {
         return;
     }
     QApplication::setOverrideCursor(Qt::WaitCursor);
+    targets_ = currentTargets();
 
-    TargetOptions to;
-    to.outputSpace = outSpace_->currentData().toString().toStdString();
-    to.adaptToOutputWhite = adaptWhite_->isChecked();
-    targets_ = computeTargets(chartSpec_, currentIlluminant(), to);
+    // A mis-ordered chart (rotated/mirrored corner clicks) fits far worse than the right order.
+    // Checked first and independent of the black level, which a wrong order would corrupt.
+    orientationWarning_.clear();
+    orientationNote_.clear();
+    const auto ranked = rankOrientations(image_.rgb, chartCorners(), sampleSettings(), chartSpec_, targets_, excluded_);
+    const auto clicked = std::find_if(ranked.begin(), ranked.end(), [](const OrientationCandidate& c) {
+        return c.quarterTurns == 0 && !c.flipped;
+    });
+    if (clicked != ranked.end() && clicked != ranked.begin() &&
+        ranked.front().meanDeltaE < 0.6 * clicked->meanDeltaE && clicked->meanDeltaE - ranked.front().meanDeltaE > 2.0) {
+        const OrientationCandidate& best = ranked.front();
+        if (autoOrient_->isChecked()) {
+            setChartCorners(best.corners);
+            orientationNote_ = tr("Auto orientation applied: rotated %1 x 90°%2 (chart fit ΔE2000 %3 instead of %4).")
+                                   .arg(best.quarterTurns)
+                                   .arg(best.flipped ? tr(", mirrored") : QString())
+                                   .arg(best.meanDeltaE, 0, 'f', 2)
+                                   .arg(clicked->meanDeltaE, 0, 'f', 2);
+        } else {
+            orientationWarning_ = tr("The patch order looks wrong (chart rotated or mirrored?). With 'Auto orientation' "
+                                     "the chart fits with ΔE2000 %1 instead of %2.")
+                                      .arg(best.meanDeltaE, 0, 'f', 2)
+                                      .arg(clicked->meanDeltaE, 0, 'f', 2);
+        }
+    }
 
     // Black level from the chart: sample without black, regress DN on the reference, resample.
-    if (BlackMode(blackMode_->currentData().toInt()) == BlackMode::FromChart) {
+    if (BlackMode(blackMode_->currentData().toInt()) == BlackMode::FromChart && orientationWarning_.isEmpty()) {
         SampleSettings s0 = sampleSettings();
         s0.black = cv::Vec3d(0, 0, 0);
         stats_ = samplePatches(image_.rgb, chartCorners(), s0);
@@ -778,7 +808,44 @@ void MainWindow::compute() {
                                  .arg(eval_.de00.mean, 0, 'f', 2)
                                  .arg(eval_.de00.max, 0, 'f', 2)
                                  .arg(eval_.de00.count)
-                                 .arg(eval_.de00Baseline.mean, 0, 'f', 2));
+                                 .arg(eval_.de00Baseline.mean, 0, 'f', 2) +
+                             (orientationNote_.isEmpty() ? QString() : "  |  " + orientationNote_));
+    if (!orientationWarning_.isEmpty()) notify(tr("Patch order"), orientationWarning_);
+}
+
+void MainWindow::setChartCorners(const ChartCorners& c) {
+    view_->setCorners({QPointF(c[0].x, c[0].y), QPointF(c[1].x, c[1].y), QPointF(c[2].x, c[2].y), QPointF(c[3].x, c[3].y)});
+    updateOverlay();
+}
+
+Targets MainWindow::currentTargets() const {
+    TargetOptions to;
+    to.outputSpace = outSpace_->currentData().toString().toStdString();
+    to.adaptToOutputWhite = adaptWhite_->isChecked();
+    return computeTargets(chartSpec_, currentIlluminant(), to);
+}
+
+void MainWindow::autoOrient() {
+    if (!cornersReady()) {
+        notify(tr("Auto orientation"), tr("Click the centers of the four corner patches first."));
+        return;
+    }
+    if (chartSpec_.neutralIndices().empty() && !chartSpec_.hasAllReferences()) {
+        notify(tr("Auto orientation"), tr("This chart needs a reference file (Load reference…)."));
+        return;
+    }
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const auto ranked = rankOrientations(image_.rgb, chartCorners(), sampleSettings(), chartSpec_, currentTargets(), excluded_);
+    QApplication::restoreOverrideCursor();
+    const OrientationCandidate& best = ranked.front();
+    setChartCorners(best.corners);
+    invalidateResult();
+    compute();
+    statusBar()->showMessage(tr("Auto orientation: rotated %1 x 90°%2, chart fit ΔE2000 %3 (next best %4)")
+                                 .arg(best.quarterTurns)
+                                 .arg(best.flipped ? tr(", mirrored") : QString())
+                                 .arg(best.meanDeltaE, 0, 'f', 2)
+                                 .arg(ranked.size() > 1 ? ranked[1].meanDeltaE : 0.0, 0, 'f', 2));
 }
 
 cv::Mat MainWindow::correctImage(const cv::Mat& native) const {
@@ -835,7 +902,10 @@ cv::Mat MainWindow::correctImage(const cv::Mat& native) const {
 // ---------------------------------------------------------------- reports
 
 QString MainWindow::buildSummary() const {
-    QString s = qs(formatMatrixText(fit_));
+    QString s;
+    if (!orientationWarning_.isEmpty()) s += tr("WARNING: ") + orientationWarning_ + "\n\n";
+    if (!orientationNote_.isEmpty()) s += orientationNote_ + "\n\n";
+    s += qs(formatMatrixText(fit_));
     s += tr("\nΔE2000 : mean %1  median %2  max %3  (%4 patches)\n")
              .arg(eval_.de00.mean, 0, 'f', 2)
              .arg(eval_.de00.median, 0, 'f', 2)
@@ -997,6 +1067,10 @@ QByteArray MainWindow::resultJson() const {
     stats["condition_number"] = eval_.conditionNumber;
     stats["camera_chroma_ratio"] = separability_.chromaRatio;
     res["stats"] = stats;
+    QJsonArray warnings;
+    if (!orientationWarning_.isEmpty()) warnings.append(orientationWarning_);
+    res["warnings"] = warnings;
+    res["orientation_note"] = orientationNote_;
     QJsonArray patches;
     for (const auto& p : eval_.patches) {
         QJsonObject o;
@@ -1062,6 +1136,7 @@ QJsonObject MainWindow::settingsJson() const {
     o["reference_file"] = referencePath_;
     o["reference_column_major"] = dataOrder_->currentData().toBool();
     o["sample_percent"] = sampleSize_->value();
+    o["auto_orientation"] = autoOrient_->isChecked();
     QJsonArray corners;
     for (const auto& c : view_->corners()) corners.append(QJsonArray{c.x(), c.y()});
     o["corners"] = corners;
@@ -1141,6 +1216,7 @@ void MainWindow::applySettingsJson(const QJsonObject& o, const QString& baseDir)
         }
     }
     sampleSize_->setValue(o["sample_percent"].toDouble(50));
+    autoOrient_->setChecked(o["auto_orientation"].toBool(true));
     excluded_.assign(chartSpec_.count(), false);
     for (const auto& e : o["excluded"].toArray())
         if (e.toInt() < int(excluded_.size())) excluded_[e.toInt()] = true;

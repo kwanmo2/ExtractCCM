@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "core/AutoOrient.h"
 #include "core/CcmSolver.h"
 #include "core/ChartSpec.h"
 #include "core/ColorMath.h"
@@ -283,6 +284,18 @@ static void testEndToEndSyntheticImage() {
                 ev.de00Baseline.mean);
     CHECK(ev.de00.mean < 0.5);
     CHECK(ev.de00Baseline.mean > 3.0);
+
+    // Corners clicked in a rotated or mirrored order are recovered by rankOrientations.
+    for (int flip = 0; flip < 2; ++flip)
+        for (int turns = 0; turns < 4; ++turns) {
+            ChartCorners wrong = rotateCorners(flip ? flipCorners(corners) : corners, turns);
+            auto ranked = rankOrientations(img, wrong, ss, cc, t, {});
+            double err = 0;
+            for (int k = 0; k < 4; ++k) err += cv::norm(ranked.front().corners[k] - corners[k]);
+            CHECK(err < 1e-3);
+            CHECK(ranked.front().meanDeltaE < 0.5);
+            CHECK(ranked[1].meanDeltaE > 5.0);
+        }
 
     // A healthy camera has no inseparable pairs.
     auto sep = analyzeSeparability(stats, t, inc, neutral);

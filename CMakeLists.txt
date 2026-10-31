@@ -22,6 +22,7 @@ add_library(ccmcore STATIC
     src/core/PatchSampler.cpp
     src/core/CcmSolver.cpp
     src/core/Report.cpp
+    src/core/AutoOrient.cpp
 )
 target_include_directories(ccmcore PUBLIC src)
 target_link_libraries(ccmcore PUBLIC ${OpenCV_LIBS})

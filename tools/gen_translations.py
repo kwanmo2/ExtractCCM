@@ -115,6 +115,27 @@ KO = {
     "Row-major": "행 우선",
     "Column-major": "열 우선",
     "Reference": "기준값",
+    "Auto orientation": "자동 방향",
+    "Tries all 8 corner orders (rotations and mirror) and keeps the one whose\n"
+    "patch colors fit the chart reference best.":
+    "코너 순서 8가지(회전·좌우반전)를 모두 시험해, 패치 색이 차트 기준값과\n"
+    "가장 잘 맞는 순서를 선택합니다.",
+    "Patch order": "패치 순서",
+    "Fix the patch order automatically when computing": "계산 시 패치 순서 자동 보정",
+    "If the clicked corners are rotated or mirrored relative to the chart,\n"
+    "the order that fits the reference best is used instead.":
+    "클릭한 코너가 차트에 비해 회전되거나 반전되어 있으면,\n"
+    "기준값과 가장 잘 맞는 순서로 바꿔서 계산합니다.",
+    "Auto orientation applied: rotated %1 x 90°%2 (chart fit ΔE2000 %3 instead of %4).":
+    "자동 방향 적용: %1 x 90° 회전%2 (차트 피팅 ΔE2000 %4 → %3).",
+    "The patch order looks wrong (chart rotated or mirrored?). With 'Auto orientation' "
+    "the chart fits with ΔE2000 %1 instead of %2.":
+    "패치 순서가 잘못된 것 같습니다 (차트가 회전 또는 반전?). '자동 방향'을 쓰면 "
+    "차트 피팅 ΔE2000이 %2 대신 %1이 됩니다.",
+    "Auto orientation: rotated %1 x 90°%2, chart fit ΔE2000 %3 (next best %4)":
+    "자동 방향: %1 x 90° 회전%2, 차트 피팅 ΔE2000 %3 (차선 %4)",
+    ", mirrored": ", 반전",
+    "WARNING: ": "경고: ",
     "Rotate 90°": "90° 회전",
     "Flip": "뒤집기",
     "Clear corners": "코너 지우기",

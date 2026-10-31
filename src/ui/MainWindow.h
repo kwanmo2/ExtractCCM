@@ -2,6 +2,7 @@
 #include <QJsonObject>
 #include <QMainWindow>
 
+#include "core/AutoOrient.h"
 #include "core/CcmSolver.h"
 #include "core/ChartSpec.h"
 #include "core/Illuminant.h"
@@ -44,6 +45,8 @@ private:
     void openRaw();
     void loadReference();
     void compute();
+    void autoOrient();
+    void setChartCorners(const ccm::ChartCorners& corners);
     void exportJson();
     QByteArray resultJson() const;
     void exportCsv();
@@ -67,6 +70,7 @@ private:
     cv::Vec3d blackLevel() const;
     ccm::Illuminant currentIlluminant() const;
     ccm::SampleSettings sampleSettings() const;
+    ccm::Targets currentTargets() const;
     ccm::FitOptions fitOptions() const;
     bool cornersReady() const;
     ccm::ChartCorners chartCorners() const;
@@ -100,6 +104,7 @@ private:
     QComboBox* dataOrder_ = nullptr;
     QLabel* chartInfo_ = nullptr;
     QDoubleSpinBox* sampleSize_ = nullptr;
+    QCheckBox* autoOrient_ = nullptr;
     QComboBox* model_ = nullptr;
     QComboBox* objective_ = nullptr;
     QCheckBox* separateGain_ = nullptr;
@@ -132,6 +137,8 @@ private:
     ccm::Evaluation eval_;
     ccm::LinearityResult linearity_;
     ccm::SeparabilityReport separability_;
+    QString orientationWarning_;  // set by compute() when another corner order fits much better
+    QString orientationNote_;     // set by compute() when it fixed the corner order itself
     bool haveResult_ = false;
     bool batch_ = false;  // no modal dialogs (command-line mode)
     QString lastError_;
