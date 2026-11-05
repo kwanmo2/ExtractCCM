@@ -113,6 +113,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         invalidateResult();
         updateOverlay();
     });
+    connect(results_, &ResultPanel::correctedGammaToggled, this, &MainWindow::updateCorrectedPreview);
     connect(results_, &ResultPanel::patchIncludeToggled, this, [this](int i, bool include) {
         if (pointMode()) {
             if (i < 0 || i >= int(pairs_.size())) return;
@@ -168,14 +169,27 @@ QWidget* MainWindow::buildSettingsPanel() {
     dataBits_->setToolTip(tr("Significant bits of the pixel data. White level = 2^bits - 1.\n"
                              "Use 16 for MSB-aligned data in a 16-bit container."));
     fImg->addRow(tr("Data bits"), dataBits_);
+    rawDisplay_ = new QCheckBox(tr("Original pixel values (no gain / gamma)"));
+    rawDisplay_->setChecked(true);
+    rawDisplay_->setToolTip(tr("Show the image as stored, like other image viewers.\n"
+                               "Off: subtract black, apply the display gain and a 2.2 gamma so linear data "
+                               "looks natural.\nDisplay only - the CCM computation is not affected."));
+    fImg->addRow(rawDisplay_);
     auto* dispRow = new QHBoxLayout;
     autoStretch_ = new QCheckBox(tr("Auto"));
     autoStretch_->setChecked(true);
     displayGain_ = doubleSpin(0.1, 100.0, 1.0, 2, 0.1);
     displayGain_->setEnabled(false);
+    autoStretch_->setEnabled(false);
     dispRow->addWidget(autoStretch_);
     dispRow->addWidget(displayGain_);
     fImg->addRow(tr("Display gain"), dispRow);
+    connect(rawDisplay_, &QCheckBox::toggled, this, [this](bool raw) {
+        autoStretch_->setEnabled(!raw);
+        displayGain_->setEnabled(!raw && !autoStretch_->isChecked());
+        updatePreview();
+        if (pointMode()) updatePointTable();
+    });
     v->addWidget(gImg);
     connect(openBtn, &QPushButton::clicked, this, &MainWindow::openImage);
     connect(rawBtn, &QPushButton::clicked, this, &MainWindow::openRaw);
@@ -185,7 +199,7 @@ QWidget* MainWindow::buildSettingsPanel() {
         updateOverlay();
     });
     connect(autoStretch_, &QCheckBox::toggled, this, [this](bool on) {
-        displayGain_->setEnabled(!on);
+        displayGain_->setEnabled(!on && !rawDisplay_->isChecked());
         updatePreview();
     });
     connect(displayGain_, &QDoubleSpinBox::valueChanged, this, &MainWindow::updatePreview);
@@ -562,26 +576,33 @@ void MainWindow::updatePreview() {
     const cv::Vec3d black = blackLevel();
     const double white = whiteLevel();
     cv::Mat f;
-    preview_.convertTo(f, CV_32FC3);
-    f -= cv::Scalar(black[0], black[1], black[2]);
-    f = f.mul(cv::Scalar(1.0 / std::max(white - black[0], 1.0), 1.0 / std::max(white - black[1], 1.0),
-                         1.0 / std::max(white - black[2], 1.0)));
-    double gain = displayGain_->value();
-    if (autoStretch_->isChecked()) {
-        cv::Mat flat = f.reshape(1, 1).clone();
-        const int n = flat.cols;
-        const int k = std::clamp(int(n * 0.995), 0, n - 1);
-        std::nth_element(flat.ptr<float>(), flat.ptr<float>() + k, flat.ptr<float>() + n);
-        const double p = flat.at<float>(k);
-        gain = p > 1e-6 ? 0.95 / p : 1.0;
-        displayGain_->blockSignals(true);
-        displayGain_->setValue(std::clamp(gain, 0.1, 100.0));
-        displayGain_->blockSignals(false);
+    if (rawDisplay_->isChecked()) {
+        // Stored values as-is (like other image viewers): DN / white level, no black, gain or gamma
+        preview_.convertTo(f, CV_32FC3, 1.0 / std::max(white, 1.0));
+        cv::max(f, 0.0, f);
+        cv::min(f, 1.0, f);
+    } else {
+        preview_.convertTo(f, CV_32FC3);
+        f -= cv::Scalar(black[0], black[1], black[2]);
+        f = f.mul(cv::Scalar(1.0 / std::max(white - black[0], 1.0), 1.0 / std::max(white - black[1], 1.0),
+                             1.0 / std::max(white - black[2], 1.0)));
+        double gain = displayGain_->value();
+        if (autoStretch_->isChecked()) {
+            cv::Mat flat = f.reshape(1, 1).clone();
+            const int n = flat.cols;
+            const int k = std::clamp(int(n * 0.995), 0, n - 1);
+            std::nth_element(flat.ptr<float>(), flat.ptr<float>() + k, flat.ptr<float>() + n);
+            const double p = flat.at<float>(k);
+            gain = p > 1e-6 ? 0.95 / p : 1.0;
+            displayGain_->blockSignals(true);
+            displayGain_->setValue(std::clamp(gain, 0.1, 100.0));
+            displayGain_->blockSignals(false);
+        }
+        f *= gain;
+        cv::max(f, 0.0, f);
+        cv::min(f, 1.0, f);
+        cv::pow(f, 1.0 / 2.2, f);
     }
-    f *= gain;
-    cv::max(f, 0.0, f);
-    cv::min(f, 1.0, f);
-    cv::pow(f, 1.0 / 2.2, f);
     cv::Mat u8;
     f.convertTo(u8, CV_8UC3, 255.0);
     QImage qi(u8.data, u8.cols, u8.rows, int(u8.step), QImage::Format_RGB888);
@@ -805,9 +826,7 @@ void MainWindow::compute() {
     haveResult_ = true;
 
     results_->showResult(names_, gridCols_, stats_, fit_, eval_, buildSummary(), buildDiagnostics());
-    cv::Mat corr = correctImage(preview_);
-    QImage qi(corr.data, corr.cols, corr.rows, int(corr.step), QImage::Format_RGB888);
-    results_->showCorrected(qi.copy());
+    updateCorrectedPreview();
     statusBar()->showMessage(tr("ΔE2000 mean %1, max %2 over %3 patches (WB only: %4)")
                                  .arg(eval_.de00.mean, 0, 'f', 2)
                                  .arg(eval_.de00.max, 0, 'f', 2)
@@ -911,7 +930,7 @@ void MainWindow::autoOrient() {
                                  .arg(ranked.size() > 1 ? ranked[1].meanDeltaE : 0.0, 0, 'f', 2));
 }
 
-cv::Mat MainWindow::correctImage(const cv::Mat& native) const {
+cv::Mat MainWindow::correctImage(const cv::Mat& native, bool srgb) const {
     const cv::Vec3d black = blackLevel();
     const double white = whiteLevel();
     const cv::Vec3d inv(1.0 / std::max(white - black[0], 1.0), 1.0 / std::max(white - black[1], 1.0),
@@ -931,7 +950,10 @@ cv::Mat MainWindow::correctImage(const cv::Mat& native) const {
         }
 
     std::vector<uchar> lut(4097);
-    for (int i = 0; i <= 4096; ++i) lut[i] = uchar(std::lround(255.0 * srgbEncode(i / 4096.0)));
+    for (int i = 0; i <= 4096; ++i) {
+        const double v = i / 4096.0;
+        lut[i] = uchar(std::lround(255.0 * (srgb ? srgbEncode(v) : v)));
+    }
 
     cv::Mat out(native.size(), CV_8UC3);
     const int chunk = 256;
@@ -1174,12 +1196,21 @@ void MainWindow::saveCorrectedImage() {
                                                       tr("Images (*.png *.bmp *.tif)"));
     if (path.isEmpty()) return;
     QApplication::setOverrideCursor(Qt::WaitCursor);
-    cv::Mat out = correctImage(image_.rgb);
+    const bool srgb = !results_->correctedLinear();  // save what the tab shows
+    cv::Mat out = correctImage(image_.rgb, srgb);
     cv::cvtColor(out, out, cv::COLOR_RGB2BGR);
     const bool ok = cv::imwrite(path.toStdString(), out);
     QApplication::restoreOverrideCursor();
     if (!ok) QMessageBox::warning(this, tr("Save"), tr("Cannot write %1").arg(path));
-    else statusBar()->showMessage(tr("Saved %1 (sRGB-encoded, 8-bit)").arg(path));
+    else if (srgb) statusBar()->showMessage(tr("Saved %1 (sRGB-encoded, 8-bit)").arg(path));
+    else statusBar()->showMessage(tr("Saved %1 (linear, no gamma, 8-bit)").arg(path));
+}
+
+void MainWindow::updateCorrectedPreview() {
+    if (!haveResult_ || preview_.empty()) return;
+    cv::Mat corr = correctImage(preview_, !results_->correctedLinear());
+    QImage qi(corr.data, corr.cols, corr.rows, int(corr.step), QImage::Format_RGB888);
+    results_->showCorrected(qi.copy());
 }
 
 // ---------------------------------------------------------------- session
