@@ -5,6 +5,7 @@
 #include "core/PatchSampler.h"
 #include "core/Report.h"
 
+class QCheckBox;
 class QPlainTextEdit;
 class QTableWidget;
 class QLabel;
@@ -34,16 +35,19 @@ public:
                     const ccm::FitResult& fit, const ccm::Evaluation& ev, const QString& summary,
                     const QString& diagnostics);
     void showCorrected(const QImage& img);
+    bool correctedLinear() const;  // corrected image without gamma (linear output)
     void clear();
 
 signals:
     void patchIncludeToggled(int index, bool include);
+    void correctedGammaToggled();
 
 private:
     QPlainTextEdit* matrixText_;
     QTableWidget* table_;
     SwatchWidget* swatches_;
     QLabel* corrected_;
+    QCheckBox* correctedLinear_;
     QPlainTextEdit* diagText_;
     bool updating_ = false;
 };

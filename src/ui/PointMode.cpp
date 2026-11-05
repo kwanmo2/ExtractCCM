@@ -22,6 +22,7 @@
 #include <QTableWidget>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <algorithm>
 #include <cmath>
 #include <opencv2/imgproc.hpp>
 
@@ -377,7 +378,14 @@ void MainWindow::updatePointTable() {
         it->setCheckState(on ? Qt::Checked : Qt::Unchecked);
         return it;
     };
-    const double displayGain = displayGain_->value();
+    // Camera swatch: same look as the image view (stored values, or gain + sRGB curve)
+    const bool raw = rawDisplay_->isChecked();
+    const double white = std::max(whiteLevel(), 1.0);
+    auto camColor = [&](const PatchStat& s) {
+        if (!raw) return linearToColor(s.mean * displayGain_->value());
+        auto v = [&](double dn) { return int(std::lround(255.0 * std::clamp(dn / white, 0.0, 1.0))); };
+        return QColor(v(s.meanDN[0]), v(s.meanDN[1]), v(s.meanDN[2]));
+    };
     for (int i = 0; i < int(pairs_.size()); ++i) {
         const auto& p = pairs_[i];
         pointTable_->setItem(i, ColIndex, readOnly(QString::number(i + 1)));
@@ -388,7 +396,7 @@ void MainWindow::updatePointTable() {
         auto* camItem = readOnly(QString());
         if (i < int(refSamples_.size()) && refSamples_[i].pixelCount > 0) refItem->setBackground(linearToColor(refSamples_[i].linear));
         if (i < int(stats_.size()) && stats_[i].pixelCount > 0)
-            camItem->setBackground(linearToColor(stats_[i].mean * displayGain));
+            camItem->setBackground(camColor(stats_[i]));
         pointTable_->setItem(i, ColRef, refItem);
         pointTable_->setItem(i, ColCam, camItem);
 

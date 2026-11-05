@@ -1,5 +1,6 @@
 #include "ui/ResultPanel.h"
 
+#include <QCheckBox>
 #include <QFontDatabase>
 #include <QHeaderView>
 #include <QLabel>
@@ -7,6 +8,7 @@
 #include <QPlainTextEdit>
 #include <QScrollArea>
 #include <QTableWidget>
+#include <QVBoxLayout>
 
 #include "core/ColorMath.h"
 
@@ -101,7 +103,18 @@ ResultPanel::ResultPanel(QWidget* parent) : QTabWidget(parent) {
     auto* scroll = new QScrollArea;
     scroll->setWidget(corrected_);
     scroll->setWidgetResizable(true);
-    addTab(scroll, tr("Corrected image"));
+    correctedLinear_ = new QCheckBox(tr("Without gamma (linear output)"));
+    correctedLinear_->setChecked(true);
+    correctedLinear_->setToolTip(tr("On: CCM output as-is, for pipelines that apply no gamma after the CCM.\n"
+                                    "Off: sRGB gamma applied, as the image looks after CCM + gamma.\n"
+                                    "'Save corrected image' uses the same setting."));
+    connect(correctedLinear_, &QCheckBox::toggled, this, &ResultPanel::correctedGammaToggled);
+    auto* correctedPage = new QWidget;
+    auto* correctedLayout = new QVBoxLayout(correctedPage);
+    correctedLayout->setContentsMargins(0, 0, 0, 0);
+    correctedLayout->addWidget(correctedLinear_);
+    correctedLayout->addWidget(scroll, 1);
+    addTab(correctedPage, tr("Corrected image"));
 
     diagText_ = new QPlainTextEdit;
     diagText_->setReadOnly(true);
@@ -118,6 +131,8 @@ void ResultPanel::clear() {
 }
 
 void ResultPanel::showCorrected(const QImage& img) { corrected_->setPixmap(QPixmap::fromImage(img)); }
+
+bool ResultPanel::correctedLinear() const { return correctedLinear_->isChecked(); }
 
 void ResultPanel::showResult(const std::vector<std::string>& names, int gridCols, const std::vector<ccm::PatchStat>& stats,
                              const ccm::FitResult&, const ccm::Evaluation& ev, const QString& summary,

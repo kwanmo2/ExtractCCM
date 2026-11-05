@@ -104,7 +104,9 @@ private:
     ccm::ChartCorners chartCorners() const;
     std::vector<bool> includedMask() const;
     std::vector<bool> neutralMask() const;
-    cv::Mat correctImage(const cv::Mat& native) const;  // -> CV_8UC3 sRGB (R,G,B)
+    // -> CV_8UC3 (R,G,B); srgb: apply the sRGB transfer curve, else linear output (no gamma)
+    cv::Mat correctImage(const cv::Mat& native, bool srgb = true) const;
+    void updateCorrectedPreview();
     QString buildSummary() const;
     QString buildDiagnostics() const;
     QJsonObject settingsJson() const;
@@ -116,6 +118,7 @@ private:
     // widgets
     QLabel* imageInfo_ = nullptr;
     QSpinBox* dataBits_ = nullptr;
+    QCheckBox* rawDisplay_ = nullptr;  // show stored pixel values (no black / gain / gamma)
     QCheckBox* autoStretch_ = nullptr;
     QDoubleSpinBox* displayGain_ = nullptr;
     QComboBox* blackMode_ = nullptr;

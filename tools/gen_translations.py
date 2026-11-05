@@ -123,6 +123,21 @@ KO = {
     "16비트 컨테이너에 MSB 정렬된 데이터라면 16을 사용하세요.",
     "Auto": "자동",
     "Display gain": "표시 게인",
+    "Original pixel values (no gain / gamma)": "원본 픽셀값 표시 (게인·감마 없음)",
+    "Show the image as stored, like other image viewers.\n"
+    "Off: subtract black, apply the display gain and a 2.2 gamma so linear data looks natural.\n"
+    "Display only - the CCM computation is not affected.":
+    "다른 이미지 뷰어처럼 저장된 값 그대로 표시합니다.\n"
+    "끄면: 블랙을 빼고 표시 게인과 감마 2.2를 적용해 선형 데이터를 자연스럽게 보여줍니다.\n"
+    "표시에만 적용되며 CCM 계산에는 영향이 없습니다.",
+    "Without gamma (linear output)": "감마 없이 표시 (선형 출력)",
+    "On: CCM output as-is, for pipelines that apply no gamma after the CCM.\n"
+    "Off: sRGB gamma applied, as the image looks after CCM + gamma.\n"
+    "'Save corrected image' uses the same setting.":
+    "켜면: CCM 출력을 그대로 표시합니다 (CCM 뒤에 감마를 적용하지 않는 파이프라인용).\n"
+    "끄면: sRGB 감마를 적용해 CCM + 감마 후의 모습으로 표시합니다.\n"
+    "'보정 이미지 저장'도 같은 설정을 따릅니다.",
+    "Saved %1 (linear, no gamma, 8-bit)": "%1 저장됨 (선형, 감마 없음, 8비트)",
     "Open image": "이미지 열기",
     "Open chart image": "차트 이미지 열기",
     "Images (*.bmp *.png *.tif *.tiff *.jpg *.jpeg *.pgm *.ppm);;All files (*)":
