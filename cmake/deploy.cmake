@@ -59,6 +59,22 @@ if(EXISTS "${EXE_DIR}/liblapack.dll" OR EXISTS "${EXE_DIR}/libcblas.dll")
             break()
         endif()
     endforeach()
+
+    # With the OpenBLAS variant (libblas=*=*openblas) they forward their exports to openblas.dll.
+    # Forwarded exports are not imports, so the dependency scan misses it too.
+    foreach(fwd liblapack.dll libcblas.dll)
+        if(EXISTS "${EXE_DIR}/${fwd}")
+            file(STRINGS "${EXE_DIR}/${fwd}" uses_openblas REGEX "openblas\\." LIMIT_COUNT 1)
+            if(uses_openblas AND NOT EXISTS "${EXE_DIR}/openblas.dll")
+                foreach(dir IN LISTS SEARCH_DIRS)
+                    if(EXISTS "${dir}/openblas.dll")
+                        file(COPY "${dir}/openblas.dll" DESTINATION "${EXE_DIR}")
+                        break()
+                    endif()
+                endforeach()
+            endif()
+        endif()
+    endforeach()
 endif()
 
 if(unresolved)
