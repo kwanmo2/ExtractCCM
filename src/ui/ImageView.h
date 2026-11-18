@@ -7,12 +7,13 @@ class QGraphicsPixmapItem;
 
 // Image viewer with zoom/pan. Corners mode: four draggable chart-corner handles.
 // Points mode: numbered markers with their sampling squares (point-mapping calibration).
+// View mode: display only, left drag pans.
 // All public coordinates are full-resolution image pixels.
 class ImageView : public QGraphicsView {
     Q_OBJECT
 public:
     enum class PatchState { Ok, Excluded, Saturated, NoReference };
-    enum class Mode { Corners, Points };
+    enum class Mode { Corners, Points, View };
 
     struct Marker {
         QPointF pos;
@@ -32,9 +33,16 @@ public:
     QVector<QPointF> corners() const { return corners_; }
     void clearCorners();
     void setOverlay(const QVector<QPolygonF>& quads, const QVector<PatchState>& states);
+    void clearImage();
     void fitToWindow();
+    // Off: never fit on resize (a view whose zoom follows another view via syncFrom)
+    void setAutoFit(bool on) { autoFit_ = on; }
+    // Same zoom and same image point at the center as `other` (both show same-size previews)
+    void syncFrom(const ImageView& other);
 
 signals:
+    void viewChanged();    // zoom or pan by the user, or fit to window
+    void layoutChanged();  // viewport resized or shown
     void cornersChanged();
     void pointClicked(QPointF imagePos);           // Points mode, click on empty image area
     void markerPressed(int index);                 // Points mode, click on a marker
@@ -46,6 +54,7 @@ protected:
     void mouseReleaseEvent(QMouseEvent* e) override;
     void wheelEvent(QWheelEvent* e) override;
     void resizeEvent(QResizeEvent* e) override;
+    void showEvent(QShowEvent* e) override;
     void drawForeground(QPainter* p, const QRectF& rect) override;
 
 private:
@@ -65,5 +74,6 @@ private:
     int dragging_ = -1;
     bool panning_ = false;
     bool userZoomed_ = false;  // keep fitting to the window until the user zooms
+    bool autoFit_ = true;
     QPoint panStart_;
 };

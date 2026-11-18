@@ -107,6 +107,8 @@ private:
     // -> CV_8UC3 (R,G,B); srgb: apply the sRGB transfer curve, else linear output (no gamma)
     cv::Mat correctImage(const cv::Mat& native, bool srgb = true) const;
     void updateCorrectedPreview();
+    ImageView* inputView() const;  // the view showing the camera image in the current mode
+    void syncViews(ImageView* from, ImageView* to);
     QString buildSummary() const;
     QString buildDiagnostics() const;
     QJsonObject settingsJson() const;
@@ -173,6 +175,7 @@ private:
     ccm::RawParams rawParams_;
     cv::Mat preview_;  // downscaled native image
     double previewScale_ = 1.0;
+    bool syncingViews_ = false;
     ccm::ChartSpec chartSpec_;
     QString referencePath_;
     std::vector<bool> excluded_;

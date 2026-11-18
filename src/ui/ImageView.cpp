@@ -3,6 +3,7 @@
 #include <QGraphicsPixmapItem>
 #include <QMouseEvent>
 #include <QScrollBar>
+#include <QTimer>
 #include <QWheelEvent>
 #include <cmath>
 
@@ -18,6 +19,10 @@ ImageView::ImageView(QWidget* parent) : QGraphicsView(parent) {
     setRenderHint(QPainter::Antialiasing);
     setMouseTracking(true);
     setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
+    // Scroll bar use by the user; the value is applied after actionTriggered, so report it later
+    for (QScrollBar* sb : {horizontalScrollBar(), verticalScrollBar()})
+        connect(sb, &QScrollBar::actionTriggered, this,
+                [this] { QTimer::singleShot(0, this, &ImageView::viewChanged); });
 }
 
 void ImageView::setImage(const QImage& preview, double previewScale) {
@@ -36,8 +41,23 @@ void ImageView::setMarkers(const QVector<Marker>& markers) {
     viewport()->update();
 }
 
+void ImageView::clearImage() {
+    scene()->clear();
+    pixmap_ = nullptr;
+    viewport()->update();
+}
+
 void ImageView::fitToWindow() {
-    if (pixmap_) fitInView(pixmap_, Qt::KeepAspectRatio);
+    if (!pixmap_) return;
+    fitInView(pixmap_, Qt::KeepAspectRatio);
+    emit viewChanged();
+}
+
+void ImageView::syncFrom(const ImageView& other) {
+    const QPointF center = other.mapToScene(other.viewport()->rect().center());
+    setTransform(other.transform());
+    centerOn(center);
+    userZoomed_ = other.userZoomed_;
 }
 
 void ImageView::setCorners(const QVector<QPointF>& corners) {
@@ -79,7 +99,7 @@ int ImageView::hitCorner(const QPoint& viewPos) const {
 
 void ImageView::mousePressEvent(QMouseEvent* e) {
     if (e->button() == Qt::MiddleButton || e->button() == Qt::RightButton ||
-        (e->button() == Qt::LeftButton && (e->modifiers() & Qt::ControlModifier))) {
+        (e->button() == Qt::LeftButton && (mode_ == Mode::View || (e->modifiers() & Qt::ControlModifier)))) {
         panning_ = true;
         panStart_ = e->pos();
         setCursor(Qt::ClosedHandCursor);
@@ -106,6 +126,11 @@ void ImageView::mouseMoveEvent(QMouseEvent* e) {
         panStart_ = e->pos();
         horizontalScrollBar()->setValue(horizontalScrollBar()->value() - d.x());
         verticalScrollBar()->setValue(verticalScrollBar()->value() - d.y());
+        emit viewChanged();
+        return;
+    }
+    if (mode_ == Mode::View) {
+        setCursor(Qt::OpenHandCursor);
         return;
     }
     if (dragging_ >= 0 && mode_ == Mode::Points) {
@@ -125,18 +150,25 @@ void ImageView::mouseMoveEvent(QMouseEvent* e) {
 void ImageView::mouseReleaseEvent(QMouseEvent*) {
     panning_ = false;
     dragging_ = -1;
-    setCursor(Qt::CrossCursor);
+    setCursor(mode_ == Mode::View ? Qt::OpenHandCursor : Qt::CrossCursor);
 }
 
 void ImageView::wheelEvent(QWheelEvent* e) {
     const double f = std::pow(1.0015, e->angleDelta().y());
     scale(f, f);
     userZoomed_ = true;
+    emit viewChanged();
 }
 
 void ImageView::resizeEvent(QResizeEvent* e) {
     QGraphicsView::resizeEvent(e);
-    if (!userZoomed_) fitToWindow();
+    if (autoFit_ && !userZoomed_) fitToWindow();
+    emit layoutChanged();
+}
+
+void ImageView::showEvent(QShowEvent* e) {
+    QGraphicsView::showEvent(e);
+    emit layoutChanged();
 }
 
 void ImageView::drawMarkers(QPainter* p, double px) {

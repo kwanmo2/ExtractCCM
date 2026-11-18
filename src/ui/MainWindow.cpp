@@ -114,6 +114,15 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         updateOverlay();
     });
     connect(results_, &ResultPanel::correctedGammaToggled, this, &MainWindow::updateCorrectedPreview);
+    // The corrected image keeps the input image's zoom and position, in both directions
+    for (ImageView* v : {view_, camView_}) {
+        connect(v, &ImageView::viewChanged, this, [this, v] { if (v == inputView()) syncViews(v, results_->correctedView()); });
+        connect(v, &ImageView::layoutChanged, this, [this, v] { if (v == inputView()) syncViews(v, results_->correctedView()); });
+    }
+    connect(results_->correctedView(), &ImageView::viewChanged, this,
+            [this] { syncViews(results_->correctedView(), inputView()); });
+    connect(results_->correctedView(), &ImageView::layoutChanged, this,
+            [this] { syncViews(inputView(), results_->correctedView()); });
     connect(results_, &ResultPanel::patchIncludeToggled, this, [this](int i, bool include) {
         if (pointMode()) {
             if (i < 0 || i >= int(pairs_.size())) return;
@@ -1210,7 +1219,17 @@ void MainWindow::updateCorrectedPreview() {
     if (!haveResult_ || preview_.empty()) return;
     cv::Mat corr = correctImage(preview_, !results_->correctedLinear());
     QImage qi(corr.data, corr.cols, corr.rows, int(corr.step), QImage::Format_RGB888);
-    results_->showCorrected(qi.copy());
+    results_->showCorrected(qi.copy(), previewScale_);
+    syncViews(inputView(), results_->correctedView());
+}
+
+ImageView* MainWindow::inputView() const { return pointMode() ? camView_ : view_; }
+
+void MainWindow::syncViews(ImageView* from, ImageView* to) {
+    if (syncingViews_ || !from || !to) return;
+    syncingViews_ = true;
+    to->syncFrom(*from);
+    syncingViews_ = false;
 }
 
 // ---------------------------------------------------------------- session
