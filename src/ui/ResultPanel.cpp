@@ -3,14 +3,13 @@
 #include <QCheckBox>
 #include <QFontDatabase>
 #include <QHeaderView>
-#include <QLabel>
 #include <QPainter>
 #include <QPlainTextEdit>
-#include <QScrollArea>
 #include <QTableWidget>
 #include <QVBoxLayout>
 
 #include "core/ColorMath.h"
+#include "ui/ImageView.h"
 
 namespace {
 
@@ -98,11 +97,9 @@ ResultPanel::ResultPanel(QWidget* parent) : QTabWidget(parent) {
     swatches_ = new SwatchWidget;
     addTab(swatches_, tr("Swatches (target / output)"));
 
-    corrected_ = new QLabel;
-    corrected_->setAlignment(Qt::AlignCenter);
-    auto* scroll = new QScrollArea;
-    scroll->setWidget(corrected_);
-    scroll->setWidgetResizable(true);
+    corrected_ = new ImageView;
+    corrected_->setMode(ImageView::Mode::View);
+    corrected_->setAutoFit(false);  // zoom follows the input image view
     correctedLinear_ = new QCheckBox(tr("Without gamma (linear output)"));
     correctedLinear_->setChecked(true);
     correctedLinear_->setToolTip(tr("On: CCM output as-is, for pipelines that apply no gamma after the CCM.\n"
@@ -113,7 +110,7 @@ ResultPanel::ResultPanel(QWidget* parent) : QTabWidget(parent) {
     auto* correctedLayout = new QVBoxLayout(correctedPage);
     correctedLayout->setContentsMargins(0, 0, 0, 0);
     correctedLayout->addWidget(correctedLinear_);
-    correctedLayout->addWidget(scroll, 1);
+    correctedLayout->addWidget(corrected_, 1);
     addTab(correctedPage, tr("Corrected image"));
 
     diagText_ = new QPlainTextEdit;
@@ -126,11 +123,11 @@ void ResultPanel::clear() {
     matrixText_->clear();
     table_->setRowCount(0);
     swatches_->setData(1, ccm::Evaluation{});
-    corrected_->clear();
+    corrected_->clearImage();
     diagText_->clear();
 }
 
-void ResultPanel::showCorrected(const QImage& img) { corrected_->setPixmap(QPixmap::fromImage(img)); }
+void ResultPanel::showCorrected(const QImage& img, double previewScale) { corrected_->setImage(img, previewScale); }
 
 bool ResultPanel::correctedLinear() const { return correctedLinear_->isChecked(); }
 

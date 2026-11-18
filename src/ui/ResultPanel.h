@@ -5,6 +5,7 @@
 #include "core/PatchSampler.h"
 #include "core/Report.h"
 
+class ImageView;
 class QCheckBox;
 class QPlainTextEdit;
 class QTableWidget;
@@ -34,7 +35,8 @@ public:
     void showResult(const std::vector<std::string>& names, int gridCols, const std::vector<ccm::PatchStat>& stats,
                     const ccm::FitResult& fit, const ccm::Evaluation& ev, const QString& summary,
                     const QString& diagnostics);
-    void showCorrected(const QImage& img);
+    void showCorrected(const QImage& img, double previewScale);
+    ImageView* correctedView() const { return corrected_; }
     bool correctedLinear() const;  // corrected image without gamma (linear output)
     void clear();
 
@@ -46,7 +48,7 @@ private:
     QPlainTextEdit* matrixText_;
     QTableWidget* table_;
     SwatchWidget* swatches_;
-    QLabel* corrected_;
+    ImageView* corrected_;
     QCheckBox* correctedLinear_;
     QPlainTextEdit* diagText_;
     bool updating_ = false;
